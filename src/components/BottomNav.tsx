@@ -1,8 +1,8 @@
 import React from 'react';
-import { Bot, User, Sliders } from 'lucide-react';
+import { Bot, User, Sliders, Headphones } from 'lucide-react';
 import { sound } from '../utils/sound.ts';
 
-export type NavTab = 'bot' | 'profile' | 'settings';
+export type NavTab = 'bot' | 'profile' | 'settings' | 'support';
 
 interface BottomNavProps {
   activeTab: NavTab;
@@ -33,6 +33,11 @@ export const BottomNav: React.FC<BottomNavProps> = ({
       id: 'settings',
       label: 'Settings',
       icon: <Sliders className="w-5 h-5" />,
+    },
+    {
+      id: 'support',
+      label: 'Support',
+      icon: <Headphones className="w-5 h-5" />,
     },
   ];
 

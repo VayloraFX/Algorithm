@@ -26,6 +26,7 @@ import { SettingsView } from './components/SettingsView.tsx';
 import { GoalModal } from './components/GoalModal.tsx';
 import { SplashScreen } from './components/SplashScreen.tsx';
 import { LoginRegisterView } from './components/LoginRegisterView.tsx';
+import { SupportView } from './components/SupportView.tsx';
 
 interface StoredUserData {
   account: AccountProfile;
@@ -691,6 +692,10 @@ export default function App() {
               onUpdateAccount={(updates) => setAccount((prev) => ({ ...prev, ...updates }))}
               onResetBalance={handleResetBalance}
             />
+          )}
+
+          {activeTab === 'support' && (
+            <SupportView onBack={() => setActiveTab('bot')} />
           )}
         </main>
 
