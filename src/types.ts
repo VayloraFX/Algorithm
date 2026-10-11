@@ -91,6 +91,11 @@ export interface TradeRecord {
 }
 
 export interface AccountProfile {
+  name: string;
+  email: string;
+  joinDate: string;
+  subscriptionActive: boolean;
+  subscriptionDate: string; // YYYY-MM-DD format for 1-day calendar reset
   isDemo: boolean;
   balance: number;
   currency: string;

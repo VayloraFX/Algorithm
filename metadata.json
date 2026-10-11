@@ -1,7 +1,6 @@
 {
-  "name": "Deriv Pulse - Rise & Fall Auto Bot",
-  "description": "Mobile-first Deriv Rise and Fall algorithmic auto trading bot template with real-time tick analysis, automated risk management, and smart advice signals.",
+  "name": "G-sqaud - Algorithmic Trading Bot",
+  "description": "Mobile-first G-sqaud algorithmic auto trading bot with real-time tick analysis, automated risk management, and smart MACD crossover signals.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
-

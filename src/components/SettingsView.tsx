@@ -27,6 +27,22 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [tokenInput, setTokenInput] = useState(account.derivToken);
   const [isSavedToken, setIsSavedToken] = useState(false);
 
+  const [baseStakeInput, setBaseStakeInput] = useState(botConfig.baseStake.toString());
+  const [takeProfitInput, setTakeProfitInput] = useState(botConfig.takeProfit.toString());
+  const [stopLossInput, setStopLossInput] = useState(botConfig.stopLoss.toString());
+
+  React.useEffect(() => {
+    setBaseStakeInput(botConfig.baseStake.toString());
+  }, [botConfig.baseStake]);
+
+  React.useEffect(() => {
+    setTakeProfitInput(botConfig.takeProfit.toString());
+  }, [botConfig.takeProfit]);
+
+  React.useEffect(() => {
+    setStopLossInput(botConfig.stopLoss.toString());
+  }, [botConfig.stopLoss]);
+
   const handleSaveToken = () => {
     sound.playTap();
     onUpdateAccount({
@@ -51,91 +67,38 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </div>
         </div>
 
-        {/* Base Stake & Duration */}
-        <div className="grid grid-cols-2 gap-3 pt-1">
-          <div>
-            <label className="text-[11px] font-bold text-slate-700 block mb-1">
-              Base Stake (USD)
-            </label>
-            <div className="relative">
-              <span className="absolute left-2.5 top-2.5 text-xs font-bold text-slate-400">$</span>
-              <input
-                type="number"
-                min="0.35"
-                max="5000"
-                step="0.5"
-                value={botConfig.baseStake}
-                onChange={(e) => {
-                  const val = parseFloat(e.target.value) || 1;
-                  onUpdateBotConfig({ baseStake: val, currentStake: val });
-                }}
-                className="w-full pl-6 pr-2 py-2 rounded-xl border border-slate-200 text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#F0B90B]/30 focus:border-[#F0B90B]"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="text-[11px] font-bold text-slate-700 block mb-1">
-              Duration (Ticks)
-            </label>
-            <div className="flex items-center gap-1">
-              {[1, 3, 5, 10].map((t) => (
-                <button
-                  key={t}
-                  onClick={() => {
-                    sound.playTap();
-                    onUpdateBotConfig({ durationTicks: t });
-                  }}
-                  className={`flex-1 py-2 rounded-xl text-xs font-mono border transition-all cursor-pointer ${
-                    botConfig.durationTicks === t
-                      ? 'bg-[#F0B90B] border-[#F0B90B] text-[#181A20] font-black shadow-xs'
-                      : 'bg-stone-50 border-stone-200 text-stone-700 hover:bg-stone-100 font-semibold'
-                  }`}
-                >
-                  {t}t
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Martingale Factor */}
+        {/* Base Stake */}
         <div>
-          <div className="flex items-center justify-between mb-1">
-            <label className="text-[11px] font-bold text-slate-700">
-              Martingale Recovery Multiplier
-            </label>
-            <span className="text-[11px] font-mono font-bold text-[#b38600]">
-              {botConfig.martingaleFactor === 1 ? 'Disabled (1.0x)' : `${botConfig.martingaleFactor}x`}
-            </span>
+          <label className="text-[11px] font-bold text-slate-700 block mb-1">
+            Base Stake (USD)
+          </label>
+          <div className="relative">
+            <span className="absolute left-2.5 top-2.5 text-xs font-bold text-slate-400">$</span>
+            <input
+              type="number"
+              min="0.35"
+              max="5000"
+              step="0.5"
+              value={baseStakeInput}
+              onChange={(e) => {
+                setBaseStakeInput(e.target.value);
+                const val = parseFloat(e.target.value);
+                if (!isNaN(val) && val > 0) {
+                  onUpdateBotConfig({ baseStake: val, currentStake: val });
+                }
+              }}
+              onBlur={() => {
+                const val = parseFloat(baseStakeInput);
+                if (isNaN(val) || val <= 0) {
+                  setBaseStakeInput(botConfig.baseStake.toString());
+                }
+              }}
+              className="w-full pl-6 pr-2 py-2 rounded-xl border border-slate-200 text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#F0B90B]/30 focus:border-[#F0B90B]"
+            />
           </div>
-          <div className="flex items-center gap-1.5">
-            {[
-              { val: 1.0, label: 'Off' },
-              { val: 1.5, label: '1.5x' },
-              { val: 2.0, label: '2.0x' },
-              { val: 2.2, label: '2.2x' },
-            ].map((m) => (
-              <button
-                key={m.label}
-                onClick={() => {
-                  sound.playTap();
-                  onUpdateBotConfig({ martingaleFactor: m.val });
-                }}
-                className={`flex-1 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                  botConfig.martingaleFactor === m.val
-                    ? 'bg-[#181A20] border-[#181A20] text-[#F0B90B]'
-                    : 'bg-stone-50 border-stone-200 text-stone-700 hover:bg-stone-100'
-                }`}
-              >
-                {m.label}
-              </button>
-            ))}
-          </div>
-          <p className="text-[10px] text-slate-400 mt-1">
-            Multiplies stake after a loss to recover drawdowns; resets to base stake on a win.
-          </p>
         </div>
+
+
 
         {/* Take Profit & Stop Loss */}
         <div className="grid grid-cols-2 gap-3 pt-1 border-t border-slate-100">
@@ -150,8 +113,20 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 min="5"
                 max="10000"
                 step="5"
-                value={botConfig.takeProfit}
-                onChange={(e) => onUpdateBotConfig({ takeProfit: parseFloat(e.target.value) || 20 })}
+                value={takeProfitInput}
+                onChange={(e) => {
+                  setTakeProfitInput(e.target.value);
+                  const val = parseFloat(e.target.value);
+                  if (!isNaN(val) && val >= 0) {
+                    onUpdateBotConfig({ takeProfit: val });
+                  }
+                }}
+                onBlur={() => {
+                  const val = parseFloat(takeProfitInput);
+                  if (isNaN(val) || val < 0) {
+                    setTakeProfitInput(botConfig.takeProfit.toString());
+                  }
+                }}
                 className="w-full pl-6 pr-2 py-2 rounded-xl border border-[#0ECB81]/40 text-xs font-mono font-bold text-[#0bb574] bg-[#0ECB81]/10 focus:outline-none focus:ring-2 focus:ring-[#0ECB81]/25 focus:border-[#0ECB81]"
               />
             </div>
@@ -168,32 +143,23 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 min="5"
                 max="10000"
                 step="5"
-                value={botConfig.stopLoss}
-                onChange={(e) => onUpdateBotConfig({ stopLoss: parseFloat(e.target.value) || 15 })}
+                value={stopLossInput}
+                onChange={(e) => {
+                  setStopLossInput(e.target.value);
+                  const val = parseFloat(e.target.value);
+                  if (!isNaN(val) && val >= 0) {
+                    onUpdateBotConfig({ stopLoss: val });
+                  }
+                }}
+                onBlur={() => {
+                  const val = parseFloat(stopLossInput);
+                  if (isNaN(val) || val < 0) {
+                    setStopLossInput(botConfig.stopLoss.toString());
+                  }
+                }}
                 className="w-full pl-6 pr-2 py-2 rounded-xl border border-[#F6465D]/40 text-xs font-mono font-bold text-[#F6465D] bg-[#F6465D]/10 focus:outline-none focus:ring-2 focus:ring-[#F6465D]/25 focus:border-[#F6465D]"
               />
             </div>
-          </div>
-        </div>
-
-        {/* Minimum Confidence Slider */}
-        <div className="pt-2 border-t border-slate-100">
-          <div className="flex items-center justify-between text-xs mb-1">
-            <span className="text-[11px] font-bold text-slate-700">Min. Signal Confidence</span>
-            <span className="font-mono font-bold text-slate-900">{botConfig.minConfidence}%</span>
-          </div>
-          <input
-            type="range"
-            min="60"
-            max="92"
-            step="1"
-            value={botConfig.minConfidence}
-            onChange={(e) => onUpdateBotConfig({ minConfidence: parseInt(e.target.value) })}
-            className="w-full accent-[#F0B90B] cursor-pointer"
-          />
-          <div className="flex justify-between text-[10px] text-slate-400 mt-0.5">
-            <span>60% (Moderate Filter)</span>
-            <span>92% (High Filter)</span>
           </div>
         </div>
       </div>

@@ -40,8 +40,15 @@ export const BotCockpit: React.FC<BotCockpitProps> = ({
   logs,
   onClearLogs,
 }) => {
+  const todayStr = new Date().toISOString().split('T')[0];
+  const isSubscribed = account.subscriptionActive && account.subscriptionDate === todayStr;
+
   const toggleBot = () => {
     sound.playTap();
+    if (!botConfig.isRunning && !isSubscribed) {
+      alert('Subscription required! Please go to your Profile page and activate your daily subscription before starting the bot.');
+      return;
+    }
     onUpdateBotConfig({ isRunning: !botConfig.isRunning });
   };
 
@@ -52,6 +59,18 @@ export const BotCockpit: React.FC<BotCockpitProps> = ({
   return (
     <div className="min-h-full flex flex-col justify-between">
       <div className="px-4 pt-3 space-y-3 flex-1 pb-3">
+        {!isSubscribed && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-900 flex items-center justify-between shadow-xs">
+            <div className="flex items-center gap-2">
+              <span className="text-base">⚠️</span>
+              <div>
+                <span className="font-extrabold block">Daily Subscription Required</span>
+                <span className="text-[11px] text-amber-700">Activate your daily pass on your Profile page to start trading.</span>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Redesigned Bot Control Deck (Authentic Binance Action Engine) */}
         <div className={`rounded-2xl p-3.5 border transition-all ${
           botConfig.isRunning
@@ -74,7 +93,7 @@ export const BotCockpit: React.FC<BotCockpitProps> = ({
             </div>
 
             <div className="text-[10px] font-mono font-bold text-slate-500">
-              ${botConfig.currentStake.toFixed(2)} USD · {botConfig.durationTicks} Ticks
+              ${botConfig.currentStake.toFixed(2)} USD
             </div>
           </div>
 

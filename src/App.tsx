@@ -12,7 +12,6 @@ import {
   ActiveContract, 
   TradeRecord, 
   AccountProfile,
-  StrategyType,
   LogEntry
 } from './types.ts';
 import { DERIV_MARKETS } from './data/markets.ts';
@@ -22,27 +21,173 @@ import { MobileFrame } from './components/MobileFrame.tsx';
 import { Header } from './components/Header.tsx';
 import { BottomNav, NavTab } from './components/BottomNav.tsx';
 import { BotCockpit } from './components/BotCockpit.tsx';
-import { TradesView } from './components/TradesView.tsx';
+import { ProfileView } from './components/ProfileView.tsx';
 import { SettingsView } from './components/SettingsView.tsx';
+import { GoalModal } from './components/GoalModal.tsx';
+import { SplashScreen } from './components/SplashScreen.tsx';
+import { LoginRegisterView } from './components/LoginRegisterView.tsx';
+
+interface StoredUserData {
+  account: AccountProfile;
+  trades: TradeRecord[];
+  password: string;
+}
+
+const STORAGE_USERS_KEY = 'gsquad_multi_users_v1';
+const STORAGE_CURRENT_EMAIL_KEY = 'gsquad_current_email_v1';
 
 export default function App() {
-  const [currentMarket, setCurrentMarket] = useState<MarketAsset>(DERIV_MARKETS[0]);
-  const [activeTab, setActiveTab] = useState<NavTab>('bot');
-
-  // Account State
-  const [account, setAccount] = useState<AccountProfile>({
-    isDemo: true,
-    balance: 10000.00,
-    currency: 'USD',
-    totalProfit: 0,
-    todayProfit: 0,
-    tradesCount: 0,
-    winsCount: 0,
-    lossesCount: 0,
-    derivToken: '',
-    derivConnected: false,
-    pingMs: 28,
+  // Multi-user storage initialization
+  const [allUsers, setAllUsers] = useState<Record<string, StoredUserData>>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_USERS_KEY);
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    // Default initial demo user
+    const defaultEmail = 'alex.morgan@gsquad.trade';
+    const initialUsers: Record<string, StoredUserData> = {
+      [defaultEmail]: {
+        password: 'password123',
+        account: {
+          name: 'Alex Morgan',
+          email: defaultEmail,
+          joinDate: '2026-01-15',
+          subscriptionActive: false,
+          subscriptionDate: '',
+          isDemo: true,
+          balance: 10000.00,
+          currency: 'USD',
+          totalProfit: 0,
+          todayProfit: 0,
+          tradesCount: 2,
+          winsCount: 2,
+          lossesCount: 0,
+          derivToken: '',
+          derivConnected: false,
+          pingMs: 28,
+        },
+        trades: [
+          {
+            id: 'trade-demo-1',
+            timestamp: Date.now() - 360000,
+            marketSymbol: '1HZ75V',
+            marketName: 'Volatility 75 (1s) Index',
+            contractType: 'RISE',
+            entrySpot: 94810.20,
+            exitSpot: 94819.50,
+            stake: 2.00,
+            payout: 3.90,
+            profit: 1.90,
+            status: 'WON',
+            durationTicks: 5,
+            strategy: 'Auto Engine',
+          },
+          {
+            id: 'trade-demo-2',
+            timestamp: Date.now() - 180000,
+            marketSymbol: '1HZ75V',
+            marketName: 'Volatility 75 (1s) Index',
+            contractType: 'FALL',
+            entrySpot: 94830.40,
+            exitSpot: 94821.10,
+            stake: 2.00,
+            payout: 3.90,
+            profit: 1.90,
+            status: 'WON',
+            durationTicks: 5,
+            strategy: 'Auto Engine',
+          },
+        ],
+      },
+    };
+    localStorage.setItem(STORAGE_USERS_KEY, JSON.stringify(initialUsers));
+    return initialUsers;
   });
+
+  const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(() => {
+    try {
+      const savedEmail = localStorage.getItem(STORAGE_CURRENT_EMAIL_KEY);
+      if (savedEmail && allUsers[savedEmail]) {
+        return savedEmail;
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return null; // Prompt login if no current user logged in
+  });
+
+  // Fixed to Volatility 75 Index (R_75) as requested
+  const [currentMarket, setCurrentMarket] = useState<MarketAsset>(DERIV_MARKETS[1]);
+  const [activeTab, setActiveTab] = useState<NavTab>('bot');
+  const [showSplash, setShowSplash] = useState(true);
+  const [goalPopup, setGoalPopup] = useState<{
+    show: boolean;
+    isProfit: boolean;
+    amount: number;
+    target: number;
+  } | null>(null);
+
+  // Active User Account Profile & Trades derived from currentUserEmail
+  const currentUserData = currentUserEmail ? allUsers[currentUserEmail] : null;
+
+  const [account, setAccount] = useState<AccountProfile>(() => {
+    if (currentUserData) return currentUserData.account;
+    return {
+      name: 'Guest',
+      email: '',
+      joinDate: new Date().toISOString().split('T')[0],
+      subscriptionActive: false,
+      subscriptionDate: '',
+      isDemo: true,
+      balance: 10000.00,
+      currency: 'USD',
+      totalProfit: 0,
+      todayProfit: 0,
+      tradesCount: 0,
+      winsCount: 0,
+      lossesCount: 0,
+      derivToken: '',
+      derivConnected: false,
+      pingMs: 28,
+    };
+  });
+
+  const [trades, setTrades] = useState<TradeRecord[]>(() => {
+    if (currentUserData) return currentUserData.trades;
+    return [];
+  });
+
+  // Sync account & trades when currentUserEmail changes
+  useEffect(() => {
+    if (currentUserEmail && allUsers[currentUserEmail]) {
+      setAccount(allUsers[currentUserEmail].account);
+      setTrades(allUsers[currentUserEmail].trades);
+      localStorage.setItem(STORAGE_CURRENT_EMAIL_KEY, currentUserEmail);
+    } else {
+      localStorage.removeItem(STORAGE_CURRENT_EMAIL_KEY);
+    }
+  }, [currentUserEmail]);
+
+  // Save users to localStorage whenever account or trades update
+  useEffect(() => {
+    if (!currentUserEmail) return;
+    setAllUsers((prev) => {
+      const updated = {
+        ...prev,
+        [currentUserEmail]: {
+          ...(prev[currentUserEmail] || { password: 'password123' }),
+          account,
+          trades,
+        },
+      };
+      localStorage.setItem(STORAGE_USERS_KEY, JSON.stringify(updated));
+      return updated;
+    });
+  }, [account, trades, currentUserEmail]);
 
   // Bot Configuration
   const [botConfig, setBotConfig] = useState<BotConfig>({
@@ -55,7 +200,7 @@ export default function App() {
     takeProfit: 50.00,
     stopLoss: 25.00,
     martingaleFactor: 2.0,
-    minConfidence: 75,
+    minConfidence: 90,
     maxConsecutiveLosses: 3,
     soundEnabled: true,
   });
@@ -65,41 +210,7 @@ export default function App() {
   const lastExecutedCrossoverIdRef = useRef<string>('');
   const lastContractFinishedRef = useRef<number>(0);
 
-  // Trades journal
-  const [trades, setTrades] = useState<TradeRecord[]>([
-    {
-      id: 'trade-demo-1',
-      timestamp: Date.now() - 360000,
-      marketSymbol: '1HZ75V',
-      marketName: 'Volatility 75 (1s) Index',
-      contractType: 'RISE',
-      entrySpot: 94810.20,
-      exitSpot: 94819.50,
-      stake: 2.00,
-      payout: 3.90,
-      profit: 1.90,
-      status: 'WON',
-      durationTicks: 5,
-      strategy: 'Auto Engine',
-    },
-    {
-      id: 'trade-demo-2',
-      timestamp: Date.now() - 180000,
-      marketSymbol: '1HZ75V',
-      marketName: 'Volatility 75 (1s) Index',
-      contractType: 'FALL',
-      entrySpot: 94830.40,
-      exitSpot: 94821.10,
-      stake: 2.00,
-      payout: 3.90,
-      profit: 1.90,
-      status: 'WON',
-      durationTicks: 5,
-      strategy: 'Auto Engine',
-    },
-  ]);
-
-  // Real-time Console Logs (Clean, concise values - No strategy names revealed)
+  // Real-time Console Logs
   const [logs, setLogs] = useState<LogEntry[]>([
     {
       id: 'log-init-1',
@@ -127,7 +238,7 @@ export default function App() {
     });
   }, []);
 
-  // Market Ticks Stream (50 ticks history for accurate 12/26 EMA stabilization)
+  // Market Ticks Stream
   const [ticks, setTicks] = useState<Tick[]>(() => {
     const initial: Tick[] = [];
     let p = DERIV_MARKETS[0].basePrice;
@@ -149,6 +260,59 @@ export default function App() {
   const [signal, setSignal] = useState<AdviceSignal>(() =>
     analyzeAdvice(ticks, botConfig.strategy)
   );
+
+  // Authentication handlers
+  const handleRegisterUser = (email: string, name: string, pass: string): boolean => {
+    if (allUsers[email]) {
+      return false; // Already exists
+    }
+    const newUserRecord: StoredUserData = {
+      password: pass,
+      account: {
+        name,
+        email,
+        joinDate: new Date().toISOString().split('T')[0],
+        subscriptionActive: false,
+        subscriptionDate: '',
+        isDemo: true,
+        balance: 10000.00,
+        currency: 'USD',
+        totalProfit: 0,
+        todayProfit: 0,
+        tradesCount: 0,
+        winsCount: 0,
+        lossesCount: 0,
+        derivToken: '',
+        derivConnected: false,
+        pingMs: 25,
+      },
+      trades: [],
+    };
+    const updated = { ...allUsers, [email]: newUserRecord };
+    setAllUsers(updated);
+    localStorage.setItem(STORAGE_USERS_KEY, JSON.stringify(updated));
+    return true;
+  };
+
+  const handleAuthenticate = (email: string, pass: string): boolean => {
+    const user = allUsers[email];
+    if (user && user.password === pass) {
+      return true;
+    }
+    return false;
+  };
+
+  const handleLoginSuccess = (email: string) => {
+    setCurrentUserEmail(email);
+    setShowSplash(true);
+    addLog('INFO', `Logged in as ${email}`);
+  };
+
+  const handleLogout = () => {
+    setCurrentUserEmail(null);
+    setBotConfig((prev) => ({ ...prev, isRunning: false }));
+    addLog('INFO', 'User signed out securely');
+  };
 
   // Reset ticks when market changes
   const handleSelectMarket = (market: MarketAsset) => {
@@ -210,7 +374,7 @@ export default function App() {
         profit: 0,
       };
 
-      addLog('EXEC', `Opened ${type} @ ${currentPrice.toFixed(currentMarket.decimalPlaces)} · $${stake.toFixed(2)} (${botConfig.durationTicks}t)`);
+      addLog('EXEC', `Opened ${type} contract · Stake $${stake.toFixed(2)} (${botConfig.durationTicks}t)`);
 
       sound.playTradeTrigger(type);
       setActiveContract(newContract);
@@ -221,7 +385,6 @@ export default function App() {
   // Ticks Stream Interval & Contract Engine
   useEffect(() => {
     const interval = setInterval(() => {
-      // Fluctuate ping slightly
       setAccount((prev) => ({
         ...prev,
         pingMs: 24 + Math.floor(Math.random() * 12),
@@ -231,7 +394,6 @@ export default function App() {
         if (prevTicks.length === 0) return prevTicks;
         const lastTick = prevTicks[prevTicks.length - 1];
 
-        // Brownian motion with mean reversion tendency
         const drift = (Math.random() - 0.495) * currentMarket.volatility * 0.35;
         const nextPrice = Number((lastTick.quote + drift).toFixed(currentMarket.decimalPlaces));
         const diff = Number((nextPrice - lastTick.quote).toFixed(currentMarket.decimalPlaces));
@@ -264,12 +426,10 @@ export default function App() {
           ];
 
           if (completed >= curr.totalTicks) {
-            // Contract Completed!
             const won = isWinCurrent;
             const payout = won ? curr.stake * (1 + curr.payoutRate) : 0;
             const profit = won ? curr.stake * curr.payoutRate : -curr.stake;
 
-            // Trigger sound & log outcome
             if (won) {
               sound.playWin();
               addLog('WIN', `WON +$${profit.toFixed(2)} USD · Exit ${nextPrice.toFixed(currentMarket.decimalPlaces)}`);
@@ -278,7 +438,6 @@ export default function App() {
               addLog('LOSS', `LOST -$${curr.stake.toFixed(2)} USD · Exit ${nextPrice.toFixed(currentMarket.decimalPlaces)}`);
             }
 
-            // Update Account & Martingale
             setAccount((acc) => {
               const newBal = acc.balance + payout;
               const newToday = acc.todayProfit + profit;
@@ -293,7 +452,6 @@ export default function App() {
               };
             });
 
-            // Log trade
             const record: TradeRecord = {
               id: curr.id,
               timestamp: Date.now(),
@@ -311,7 +469,6 @@ export default function App() {
             };
             setTrades((prevTrades) => [record, ...prevTrades]);
 
-            // Adjust Martingale stake
             setBotConfig((b) => {
               let nextStake = b.baseStake;
               if (!won && b.martingaleFactor > 1) {
@@ -319,10 +476,29 @@ export default function App() {
                 addLog('WARN', `Martingale step: Stake $${nextStake.toFixed(2)} USD`);
               }
 
-              // Check Risk bounds
               const currentTotalProfit = account.todayProfit + profit;
-              if (currentTotalProfit >= b.takeProfit || currentTotalProfit <= -b.stopLoss) {
-                addLog('WARN', `Target limit reached ($${currentTotalProfit.toFixed(2)}) · Bot paused`);
+              if (currentTotalProfit >= b.takeProfit) {
+                addLog('WARN', `Take profit target reached ($${currentTotalProfit.toFixed(2)}) · Bot paused`);
+                setGoalPopup({
+                  show: true,
+                  isProfit: true,
+                  amount: currentTotalProfit,
+                  target: b.takeProfit,
+                });
+                return {
+                  ...b,
+                  isRunning: false,
+                  currentStake: b.baseStake,
+                };
+              }
+              if (currentTotalProfit <= -b.stopLoss) {
+                addLog('WARN', `Stop loss limit reached ($${currentTotalProfit.toFixed(2)}) · Bot paused`);
+                setGoalPopup({
+                  show: true,
+                  isProfit: false,
+                  amount: currentTotalProfit,
+                  target: b.stopLoss,
+                });
                 return {
                   ...b,
                   isRunning: false,
@@ -337,7 +513,7 @@ export default function App() {
             });
 
             lastContractFinishedRef.current = Date.now();
-            return null; // Contract ended
+            return null;
           }
 
           return {
@@ -355,31 +531,26 @@ export default function App() {
     return () => clearInterval(interval);
   }, [currentMarket, botConfig.strategy, botConfig.takeProfit, botConfig.stopLoss, account.todayProfit]);
 
-  // Automated Bot Trigger: strictly executes ONE order per fresh crossover signal. If no signal, no trade.
+  // Automated Bot Trigger
   useEffect(() => {
     if (!botConfig.isRunning) return;
 
-    // Strict Rule: If no signal or direction is WAIT, NO TRADE!
     if (!signal.hasCrossoverSignal || signal.direction === 'WAIT' || !signal.crossoverId) {
       return;
     }
 
-    // Strict Rule: Exactly ONE order per crossover signal!
     if (signal.crossoverId === lastExecutedCrossoverIdRef.current) {
       return;
     }
 
-    // If an active contract is already running, register this crossover as handled to avoid delayed duplicate execution
     if (activeContract) {
       lastExecutedCrossoverIdRef.current = signal.crossoverId;
       return;
     }
 
-    // Cooldown check after previous contract finished
     const timeSinceLast = Date.now() - lastContractFinishedRef.current;
     if (timeSinceLast < 800) return;
 
-    // Check confidence threshold
     if (signal.confidence >= botConfig.minConfidence) {
       lastExecutedCrossoverIdRef.current = signal.crossoverId;
       addLog('SIGNAL', `Signal triggered: ${signal.direction} [${signal.confidence}%] · 1 order per crossover`);
@@ -397,7 +568,39 @@ export default function App() {
     addLog,
   ]);
 
-  // Demo balance reset
+  // Market scanning logs when bot is running
+  useEffect(() => {
+    if (!botConfig.isRunning) return;
+
+    const messages = [
+      'Market scanning · Analyzing price structure...',
+      'Scanning market stream · Calculating MACD momentum...',
+      'Evaluating exponential moving average crossover structure...',
+      'Market scanning · Checking signal confidence...',
+      'Analyzing tick velocity and trend structure...',
+      'Scanning market volatility and momentum patterns...',
+    ];
+
+    const scanInterval = setInterval(() => {
+      const randomMsg = messages[Math.floor(Math.random() * messages.length)];
+      addLog('SIGNAL', randomMsg);
+    }, 650);
+
+    return () => clearInterval(scanInterval);
+  }, [botConfig.isRunning, addLog]);
+
+  const handleResetSession = () => {
+    setAccount((prev) => ({
+      ...prev,
+      todayProfit: 0,
+    }));
+    setBotConfig((prev) => ({
+      ...prev,
+      currentStake: prev.baseStake,
+    }));
+    addLog('INFO', 'Session P&L reset to $0.00');
+  };
+
   const handleResetBalance = () => {
     setAccount((prev) => ({
       ...prev,
@@ -414,78 +617,101 @@ export default function App() {
     }));
   };
 
-  const currentPrice = ticks.length > 0 ? ticks[ticks.length - 1].quote : currentMarket.basePrice;
-  const lastDiff = ticks.length > 0 ? ticks[ticks.length - 1].diff : 0;
+  // If user is not logged in, render LoginRegisterView
+  if (!currentUserEmail) {
+    return (
+      <LoginRegisterView
+        onLoginSuccess={handleLoginSuccess}
+        getAllUsers={() => allUsers}
+        onRegisterUser={handleRegisterUser}
+        onAuthenticate={handleAuthenticate}
+      />
+    );
+  }
 
   return (
-    <MobileFrame>
-      {/* Mobile Top App Header (Firmly sticky pinned at top) */}
-      <Header
-        currentMarket={currentMarket}
-        onSelectMarket={handleSelectMarket}
-        account={account}
-        onToggleAccountMode={(isDemo) =>
-          setAccount((prev) => ({
-            ...prev,
-            isDemo,
-            balance: isDemo ? 10000.00 : 1248.50,
-          }))
-        }
-        currentPrice={currentPrice}
-        lastDiff={lastDiff}
-      />
+    <>
+      {showSplash && (
+        <SplashScreen onDismiss={() => setShowSplash(false)} />
+      )}
+      <MobileFrame>
+        {/* Mobile Top App Header */}
+        <Header
+          account={account}
+          onToggleAccountMode={(isDemo) =>
+            setAccount((prev) => ({
+              ...prev,
+              isDemo,
+              balance: isDemo ? 10000.00 : 1248.50,
+            }))
+          }
+        />
 
-      {/* Screen Content based on active bottom tab (Exclusively scrollable middle viewport) */}
-      <main className="flex-1 overflow-y-auto overscroll-contain relative bg-[#f6f1e8] min-h-0 w-full">
-        {activeTab === 'bot' && (
-          <BotCockpit
-            currentMarket={currentMarket}
-            ticks={ticks}
-            signal={signal}
-            botConfig={botConfig}
-            onUpdateBotConfig={(updates) => {
-              if (updates.isRunning !== undefined) {
-                addLog(
-                  updates.isRunning ? 'INFO' : 'WARN',
-                  updates.isRunning
-                    ? `Auto Pilot started · 1 order per crossover`
-                    : 'Auto Pilot paused · Standby'
-                );
-              }
-              setBotConfig((prev) => ({ ...prev, ...updates }));
-            }}
-            activeContract={activeContract}
-            account={account}
-            logs={logs}
-            onClearLogs={() => setLogs([])}
+        {/* Screen Content */}
+        <main className="flex-1 overflow-y-auto overscroll-contain relative bg-[#f6f1e8] min-h-0 w-full">
+          {activeTab === 'bot' && (
+            <BotCockpit
+              currentMarket={currentMarket}
+              ticks={ticks}
+              signal={signal}
+              botConfig={botConfig}
+              onUpdateBotConfig={(updates) => {
+                if (updates.isRunning !== undefined) {
+                  addLog(
+                    updates.isRunning ? 'INFO' : 'WARN',
+                    updates.isRunning
+                      ? `Auto Pilot started · 1 order per crossover`
+                      : 'Auto Pilot paused · Standby'
+                  );
+                }
+                setBotConfig((prev) => ({ ...prev, ...updates }));
+              }}
+              activeContract={activeContract}
+              account={account}
+              logs={logs}
+              onClearLogs={() => setLogs([])}
+            />
+          )}
+
+          {activeTab === 'profile' && (
+            <ProfileView
+              account={account}
+              trades={trades}
+              onResetBalance={handleResetBalance}
+              onUpdateAccount={(updates) => setAccount((prev) => ({ ...prev, ...updates }))}
+              onLogout={handleLogout}
+            />
+          )}
+
+          {activeTab === 'settings' && (
+            <SettingsView
+              botConfig={botConfig}
+              onUpdateBotConfig={(updates) => setBotConfig((prev) => ({ ...prev, ...updates }))}
+              account={account}
+              onUpdateAccount={(updates) => setAccount((prev) => ({ ...prev, ...updates }))}
+              onResetBalance={handleResetBalance}
+            />
+          )}
+        </main>
+
+        {/* Mobile Bottom Navigation Bar */}
+        <BottomNav
+          activeTab={activeTab}
+          onChangeTab={setActiveTab}
+          botRunning={botConfig.isRunning}
+        />
+
+        {/* Goal / Stop Loss Reached Popup Modal */}
+        {goalPopup?.show && (
+          <GoalModal
+            isProfit={goalPopup.isProfit}
+            amount={goalPopup.amount}
+            targetAmount={goalPopup.target}
+            onClose={() => setGoalPopup(null)}
+            onResetSession={handleResetSession}
           />
         )}
-
-        {activeTab === 'trades' && (
-          <TradesView
-            trades={trades}
-            account={account}
-            onClearHistory={() => setTrades([])}
-          />
-        )}
-
-        {activeTab === 'settings' && (
-          <SettingsView
-            botConfig={botConfig}
-            onUpdateBotConfig={(updates) => setBotConfig((prev) => ({ ...prev, ...updates }))}
-            account={account}
-            onUpdateAccount={(updates) => setAccount((prev) => ({ ...prev, ...updates }))}
-            onResetBalance={handleResetBalance}
-          />
-        )}
-      </main>
-
-      {/* Mobile Bottom Navigation Bar (Firmly sticky pinned at bottom) */}
-      <BottomNav
-        activeTab={activeTab}
-        onChangeTab={setActiveTab}
-        botRunning={botConfig.isRunning}
-      />
-    </MobileFrame>
+      </MobileFrame>
+    </>
   );
 }
